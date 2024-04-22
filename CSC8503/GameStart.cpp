@@ -75,6 +75,7 @@ void SetUpPCInputDevices(Window* w, bool isNetworkTestActive) {
 }
 
 int RunGame(){
+    auto startTime = chrono::high_resolution_clock::now();
     bool isNetworkTestActive = false;
 
     float winWidth = isNetworkTestActive ? NETWORK_TEST_WIDTH : GAME_WINDOW_WIDTH;
@@ -99,6 +100,9 @@ int RunGame(){
     //erendgrmnc: make the bool below true for network test.   
 
     w->GetTimer().GetTimeDeltaSeconds(); //Clear the timer so we don't get a larget first dt!
+    auto endTime = chrono::high_resolution_clock::now();
+    chrono::duration<double, std::milli> msDouble = endTime - startTime;
+    std::cout << "Loading Complete: Time Taken: " << msDouble.count() << "ms\n";
     while (w->UpdateWindow() && !sceneManager->GetIsForceQuit()) {
         float dt = w->GetTimer().GetTimeDeltaSeconds();
         if (dt > 0.1f) {
