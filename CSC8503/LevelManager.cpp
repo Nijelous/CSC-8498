@@ -532,16 +532,22 @@ void LevelManager::InitialiseAssets() {
 	bool updateScreen = true;
 	bool meshesLoaded = false;
 	int meshCount = 0;
+	bool texturesLoaded = false;
+	int textureCount = 0;
 	bool loaded = false;
 	int lines = 0;
 	int animLines = 0;
 	int matLines = 0;
-	std::thread renderFlip([&updateScreen, &loaded, &meshesLoaded, &meshCount, &lines] {
+	std::thread renderFlip([&updateScreen, &loaded, &meshesLoaded, &meshCount, &lines, &texturesLoaded, &textureCount] {
 		int added = 0;
 		while (!loaded) {
 			updateScreen = true;
 			std::this_thread::sleep_for(16.7ms);
-			if (meshesLoaded && added != meshCount) {
+			if (meshesLoaded && added < meshCount) {
+				added++;
+				lines++;
+			}
+			if(texturesLoaded && added != textureCount + meshCount) {
 				added++;
 				lines++;
 			}
@@ -585,11 +591,14 @@ void LevelManager::InitialiseAssets() {
 #endif
 			}
 			else if (groupType == "tex") {
-				for (int i = 0; i < groupDetails.size(); i += 3) {
+				mRenderer->LoadTextures(mTextures, groupDetails);
+				textureCount = groupDetails.size() / 3;
+				texturesLoaded = true;
+				/*for (int i = 0; i < groupDetails.size(); i += 3) {
 					CheckRenderLoadScreen(updateScreen, lines + animLines + matLines, fileSize);
 					mTextures[groupDetails[i]] = mRenderer->LoadTexture(groupDetails[i + 1]);
 					lines++;
-				}
+				}*/
 			}
 			else if (groupType == "sdr") {
 				for (int i = 0; i < groupDetails.size(); i += 3) {

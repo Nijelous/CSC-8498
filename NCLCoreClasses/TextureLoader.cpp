@@ -8,8 +8,11 @@ https://research.ncl.ac.uk/game/
 */
 #include "TextureLoader.h"
 #define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
 
 #include "./stb/stb_image.h"
+#include "./stb/stb_image_resize.h"
+#include "./stb/stb_image_write.h"
 
 #include "Assets.h"
 
@@ -24,10 +27,14 @@ bool TextureLoader::LoadTexture(const std::string& filename, char*& outData, int
 		return false;
 	}
 
-	if(unsigned char* inData = LoadTexFile(filename, outData, &width, &height, &channels, &flags)) {
+	bool highestQuality = false;
+
+	/*if(unsigned char* inData = LoadTxtrFile(filename, outData, &width, &height, &channels, &flags)) {
 		outData = (char*)inData;
 		return true;
-	}
+	}*/
+
+	std::string textureFilename = filename.substr(0, filename.find('.')) + ".texture";
 
 	std::filesystem::path path(filename);
 	
@@ -39,21 +46,30 @@ bool TextureLoader::LoadTexture(const std::string& filename, char*& outData, int
 
 	std::string realPath = isAbsolute ? filename : Assets::TEXTUREDIR + filename;
 
+	std::string texturePath = isAbsolute ? textureFilename : Assets::TEXTUREDIR + textureFilename;
+
 	if (it != fileHandlers.end()) {
 		//There's a custom handler function for this, just use that
 		return it->second(realPath, outData, width, height, channels, flags);
 	}
-	//By default, attempt to use stb image to get this texture
-	stbi_uc *texData = stbi_load(realPath.c_str(), &width, &height, &channels, 4); //4 forces this to always be rgba!
+
+	stbi_uc* texData = nullptr;
+
+	if(!highestQuality) {
+		texData = stbi_load(texturePath.c_str(), &width, &height, &channels, 4);
+	}
+
+	if (!texData) {
+		texData = stbi_load(realPath.c_str(), &width, &height, &channels, 4); //4 forces this to always be rgba!
+		if(texData) CreateTextureFile(filename, texData, width, height);
+	}
 
 	channels = 4; //it gets forced, we don't care about the 'real' channel size
 
 	if (texData) {
 		outData = (char*)texData;
-		std::cout << "success"+filename << std::endl;
-		if (filename.substr(0, 8) == "/Cubemap") {
-			CreateTexFile(filename, outData, width, height, channels, flags);
-		}
+		std::cout << "success"+filename << "\n";
+		//CreateTxtrFile(filename, outData, width, height, channels, flags);
 		return true;
 	}
 	std::cout << "fail2"+ filename << std::endl;
@@ -89,7 +105,7 @@ unsigned int NCL::TextureLoader::StrToUInt(const char* str, int strLen) {
 	return num;
 }
 
-void TextureLoader::CreateTexFile(const std::string& filename, char*& outdata, int& width, int& height, int& channels, int& flags) {
+void TextureLoader::CreateTxtrFile(const std::string& filename, char*& outdata, int& width, int& height, int& channels, int& flags) {
 	std::string txtrFilename = filename.substr(0, filename.find('.')) + ".txtr";
 
 	std::filesystem::path path(txtrFilename);
@@ -103,16 +119,17 @@ void TextureLoader::CreateTexFile(const std::string& filename, char*& outdata, i
 	newfile << width << "," << height << "," << channels << "," << flags << ",\n";
 
 	int i = 0;
-
-	while(outdata[i] != '\0') {
+	int count = 0;
+	while(count < width) {
 		newfile << outdata[i];
 		i++;
+		if(outdata[i] == '\0') count++;
 	}
 
 	newfile.close();
 }
 
-unsigned char* TextureLoader::LoadTexFile(const std::string& filename, char*& outData, int* width, int* height, int* channels, int* flags) {
+unsigned char* TextureLoader::LoadTxtrFile(const std::string& filename, char*& outData, int* width, int* height, int* channels, int* flags) {
 	std::string txtrFilename = filename.substr(0, filename.find('.')) + ".txtr";
 
 	std::filesystem::path path(txtrFilename);
@@ -131,8 +148,8 @@ unsigned char* TextureLoader::LoadTexFile(const std::string& filename, char*& ou
 
 		int count = 0;
 
-		char* tempStr = new char[14];
-		tempStr[13] = '\0';
+		char* tempStr = new char[5];
+		tempStr[4] = '\0';
 		int strLen = 0;
 
 		for(char c : line) {
@@ -184,8 +201,45 @@ unsigned char* TextureLoader::LoadTexFile(const std::string& filename, char*& ou
 		tempStr = nullptr;
 		delete[] tempStr;
 
+		f.close();
+
 		return returnData;
 	}
 
 	return nullptr;
+}
+
+void TextureLoader::CreateTextureFile(const std::string& filename, unsigned char* texData, int& width, int& height) {
+	stbi_uc* texture = nullptr;
+	int newWidth, newHeight;
+	bool resize = false;
+
+	std::string texFilename = filename.substr(0, filename.find('.')) + ".texture";
+
+	std::filesystem::path path(texFilename);
+
+	bool isAbsolute = path.is_absolute();
+
+	std::string realPath = isAbsolute ? texFilename : Assets::TEXTUREDIR + texFilename;
+
+	if(width > 512 && height > 512) {
+		resize = true;
+		newWidth = width / 2;
+		newHeight = height / 2;
+		texture = (stbi_uc*)malloc(newWidth * newHeight * 4);
+		stbir_resize_uint8(texData, width, height, 0, texture, newWidth, newHeight, 0, 4);
+	}
+	if (!texture) {
+		texture = texData;
+		newWidth = width;
+		newHeight = height;
+	}
+	if (!stbi_write_png(realPath.c_str(), newWidth, newHeight, 4, texture, newWidth * 4)) {
+		std::cout << "Failed to create .texture file for " << texFilename << "\n";
+		return;
+	}
+	if (resize) {
+		free(texture);
+		texture = nullptr;
+	}
 }

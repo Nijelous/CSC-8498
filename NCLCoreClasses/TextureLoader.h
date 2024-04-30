@@ -30,9 +30,11 @@ namespace NCL {
 	protected:
 		static unsigned int StrToUInt(const char* str, int strLen);
 
-		static void CreateTexFile(const std::string& filename, char*& outdata, int& width, int& height, int& channels, int& flags);
+		static void CreateTxtrFile(const std::string& filename, char*& outdata, int& width, int& height, int& channels, int& flags);
 
-		static unsigned char* LoadTexFile(const std::string& filename, char*& outData, int* width, int* height, int* channels, int* flags);
+		static unsigned char* LoadTxtrFile(const std::string& filename, char*& outData, int* width, int* height, int* channels, int* flags);
+
+		static void CreateTextureFile(const std::string& filename, unsigned char* texData, int& width, int& height);
 
 		static std::string GetFileExtension(const std::string& fileExtension);
 

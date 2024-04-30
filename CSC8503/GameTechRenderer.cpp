@@ -161,7 +161,7 @@ void GameTechRenderer::LoadSkybox() {
 	glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	CreateAndFillSkyboxUBO();
-	
+
 }
 
 void GameTechRenderer::CreateAndFillSkyboxUBO() {
@@ -880,6 +880,44 @@ Texture* GameTechRenderer::LoadTexture(const std::string& name) {
 	}
 	
 	return tex;
+}
+
+void GameTechRenderer::LoadTextures(std::unordered_map<std::string, Texture*>& textureMap, const std::vector<std::string>& details) {
+	int loadSplit = details.size() / 12;
+	std::thread fileLoadThreads[4];
+	std::vector<char*> texData;
+	std::fill_n(std::back_inserter(texData), details.size()/3, nullptr);
+	std::vector<int> widths;
+	std::fill_n(std::back_inserter(widths), details.size() / 3, 0);
+	std::vector<int> heights;
+	std::fill_n(std::back_inserter(heights), details.size() / 3, 0);
+	std::vector<int> channels;
+	std::fill_n(std::back_inserter(channels), details.size() / 3, 0);
+	std::vector<int> flags;
+	std::fill_n(std::back_inserter(flags), details.size() / 3, 0);
+	for (int i = 0; i < 4; i++) {
+		fileLoadThreads[i] = std::thread([details, i, loadSplit, &texData, &widths, &heights, &channels, &flags] {
+			int endPoint = i == 3 ? details.size() / 3 : loadSplit * (i + 1);
+			for (int j = loadSplit * i; j < endPoint; j++) {
+				TextureLoader::LoadTexture(details[(j * 3) + 1], texData[j], widths[j], 
+					heights[j], channels[j], flags[j]);
+			}
+			});
+	}
+	for (int i = 0; i < 4; i++) {
+		fileLoadThreads[i].join();
+	}
+	for (int i = 0; i < details.size() / 3; i++) {
+		OGLTexture* tex = OGLTexture::TextureFromData(texData[i], widths[i], heights[i], channels[i]).release();
+		if (FindTexHandleIndex(tex->GetObjectID()) == -1) {
+			const GLuint64 handle = glGetTextureHandleARB(tex->GetObjectID());
+			glMakeTextureHandleResidentARB(handle);
+			mTextureHandles.push_back(std::pair<GLuint, GLuint64>(tex->GetObjectID(), handle));
+			mLoadedTextures[details[i * 3]] = tex->GetObjectID();
+			textureMap[details[i * 3]] = tex;
+		}
+		free(texData[i]);
+	}
 }
 
 GLuint GameTechRenderer::LoadTextureGetID(const std::string& name) {
