@@ -58,23 +58,25 @@ namespace NCL::Rendering {
 	public:		
 		static bool LoadMesh(const std::string& filename, Mesh& destinationMesh);
 
-
-
 	protected:
+		static unsigned int StrToUInt(const char* str, int strLen);
+		static float StrToFloat(const char* str, const char* exp, const bool hasExponent, int strLen);
+		static int StrToInt(const char* str, int strLen);
+
 		static void* ReadVertexData(GeometryChunkData dataType, GeometryChunkTypes chunkType, int numVertices);
 		static void ReadTextInts(std::ifstream& file, vector<Maths::Vector2i>& element, int numVertices);
 		static void ReadTeReadTextIntsxtFloats(std::ifstream& file, vector<Maths::Vector3i>& element, int numVertices);
-		static void ReadTextInts(std::ifstream& file, vector<Maths::Vector4i>& element, int numVertices);
-		static void ReadTextFloats(std::ifstream& file, vector<Maths::Vector2>& element, int numVertices);
-		static void ReadTextFloats(std::ifstream& file, vector<Maths::Vector3>& element, int numVertices);
-		static void ReadTextFloats(std::ifstream& file, vector<Maths::Vector4>& element, int numVertices);
-		static void ReadIntegers(std::ifstream& file, vector<unsigned int>& elements, int intCount);
+		static void ReadTextInts(std::ifstream& file, vector<Maths::Vector4i>& element);
+		static void ReadTextFloats(std::ifstream& file, vector<Maths::Vector2>& element);
+		static void ReadTextFloats(std::ifstream& file, vector<Maths::Vector3>& element);
+		static void ReadTextFloats(std::ifstream& file, vector<Maths::Vector4>& element);
+		static void ReadIntegers(std::ifstream& file, vector<unsigned int>& elements);
 
 		static void ReadRigPose(std::ifstream& file, vector<Maths::Matrix4>& into);
 		static void ReadJointParents(std::ifstream& file, std::vector<int>& parentIDs);
 		static void ReadJointNames(std::ifstream& file, std::vector<std::string>& names);
-		static void ReadSubMeshes(std::ifstream& file, int count, std::vector<struct SubMesh>& subMeshes);
-		static void ReadSubMeshNames(std::ifstream& file, int count, std::vector<std::string>& names);
+		static void ReadSubMeshes(std::ifstream& file, std::vector<struct SubMesh>& subMeshes);
+		static void ReadSubMeshNames(std::ifstream& file, std::vector<std::string>& names);
 		static void ReadIntegerArray(std::ifstream& file, vector<int>& into);
 		static void ReadBindposes(std::ifstream& file, vector<Mesh::SubMeshPoses>& bindPoses);
 

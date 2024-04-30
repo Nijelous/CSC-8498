@@ -752,8 +752,8 @@ void GameTechRenderer::LoadMeshes(std::unordered_map<std::string, Mesh*>& meshMa
 	for (int i = 0; i < details.size(); i += 3) {
 		meshes.push_back(new OGLMesh());
 	}
-	std::thread fileLoadThreads[4];
 	int loadSplit = details.size() / 12;
+	std::thread fileLoadThreads[4];
 	for (int i = 0; i < 4; i++) {
 		fileLoadThreads[i] = std::thread([meshes, details, i, loadSplit] {
 			int endPoint = i == 3 ? details.size() / 3 : loadSplit * (i + 1);

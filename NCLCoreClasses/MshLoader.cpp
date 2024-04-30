@@ -57,45 +57,45 @@ bool MshLoader::LoadMesh(const std::string& filename, Mesh& destinationMesh) {
 		switch ((GeometryChunkTypes)chunkType) {
 		case GeometryChunkTypes::VPositions: {
 			vector<Vector3> positions;
-			ReadTextFloats(file, positions, numVertices);
+			ReadTextFloats(file, positions);
 			destinationMesh.SetVertexPositions(positions);
 		}break;
 		case GeometryChunkTypes::VColors: {
 			vector<Vector4> colours;
-			ReadTextFloats(file, colours, numVertices);
+			ReadTextFloats(file, colours);
 			destinationMesh.SetVertexColours(colours);
 		}break;
 		case GeometryChunkTypes::VNormals: {
 			vector<Vector3> normals;
-			ReadTextFloats(file, normals, numVertices);
+			ReadTextFloats(file, normals);
 			destinationMesh.SetVertexNormals(normals);
 		}break;
 		case GeometryChunkTypes::VTangents: {
 			vector<Vector4> tangents;
-			ReadTextFloats(file, tangents, numVertices);
+			ReadTextFloats(file, tangents);
 			destinationMesh.SetVertexTangents(tangents);
 
 		}break;
 		case GeometryChunkTypes::VTex0: {
 			vector<Vector2> texCoords;
-			ReadTextFloats(file, texCoords, numVertices);
+			ReadTextFloats(file, texCoords);
 			destinationMesh.SetVertexTextureCoords(texCoords);
 
 		}break;
 		case GeometryChunkTypes::Indices: {
 			vector<unsigned int> indices;
-			ReadIntegers(file, indices, numIndices);
+			ReadIntegers(file, indices);
 			destinationMesh.SetVertexIndices(indices);
 		}break;
 
 		case GeometryChunkTypes::VWeightValues: {
 			vector<Vector4> skinWeights;
-			ReadTextFloats(file, skinWeights, numVertices);
+			ReadTextFloats(file, skinWeights);
 			destinationMesh.SetVertexSkinWeights(skinWeights);
 		}break;
 		case GeometryChunkTypes::VWeightIndices: {
 			vector<Vector4i> skinIndices;
-			ReadTextInts(file, skinIndices, numVertices);
+			ReadTextInts(file, skinIndices);
 			destinationMesh.SetVertexSkinIndices(skinIndices);
 		}break;
 		case GeometryChunkTypes::JointNames: {
@@ -120,13 +120,13 @@ bool MshLoader::LoadMesh(const std::string& filename, Mesh& destinationMesh) {
 		}break;
 		case GeometryChunkTypes::SubMeshes: {
 			vector<SubMesh> subMeshes;
-			ReadSubMeshes(file, numMeshes, subMeshes);
+			ReadSubMeshes(file, subMeshes);
 
 			destinationMesh.SetSubMeshes(subMeshes);
 		}break;
 		case GeometryChunkTypes::SubMeshNames: {
 			std::vector<std::string> subMeshNames;
-			ReadSubMeshNames(file, numMeshes, subMeshNames);
+			ReadSubMeshNames(file, subMeshNames);
 			destinationMesh.SetSubMeshNames(subMeshNames);
 		}break;
 		case GeometryChunkTypes::BindPoseIndices: {
@@ -151,22 +151,68 @@ bool MshLoader::LoadMesh(const std::string& filename, Mesh& destinationMesh) {
 void MshLoader::ReadIntegerArray(std::ifstream& file, vector<int>& into) {//New!
 	int count = 0;
 	file >> count;
-	for (int i = 0; i < count; ++i) {
-		int r = 0;
-		file >> r;
-		into.push_back(r);
+
+	std::string line;
+	file >> line;
+
+	unsigned int temp;
+
+	char* tempStr = new char[14];
+	tempStr[13] = '\0';
+	int strLen = 0;
+
+	for (char c : line) {
+		switch (c) {
+		case ',':
+			temp = StrToUInt(tempStr, strLen);
+			into.emplace_back(temp);
+			strLen = 0;
+			break;
+		default:
+			tempStr[strLen] = c;
+			strLen++;
+			break;
+		}
 	}
+
+	tempStr = nullptr;
+	delete[] tempStr;
 }
 
 void MshLoader::ReadBindposes(std::ifstream& file, vector<Mesh::SubMeshPoses>& bindPoses) {//New!
 	int poseCount = 0;
 	file >> poseCount;
 
-	for (int i = 0; i < poseCount; ++i) {
-		Mesh::SubMeshPoses m;
-		file >> m.start;
-		file >> m.count;
-		bindPoses.emplace_back(m);
+	std::string line;
+	file >> line;
+
+	Mesh::SubMeshPoses temp;
+	int count = 0;
+
+	char* tempStr = new char[14];
+	tempStr[13] = '\0';
+	int strLen = 0;
+
+	for (char c : line) {
+		switch (c) {
+		case ',':
+			count++;
+			switch (count % 2) {
+			case 0:
+				temp.count = StrToUInt(tempStr, strLen);
+				bindPoses.emplace_back(temp);
+				break;
+			case 1:
+				temp.start = StrToUInt(tempStr, strLen);
+				break;
+			}
+			strLen = 0;
+			break;
+		default:
+			tempStr[strLen] = c;
+			strLen++;
+			break;
+		}
 	}
 }
 
@@ -174,61 +220,256 @@ void MshLoader::ReadRigPose(std::ifstream& file, vector<Matrix4>& into) {
 	int matCount = 0;
 	file >> matCount;
 
-	for (int m = 0; m < matCount; ++m) {
-		Matrix4 mat;
+	std::string line;
+	file >> line;
 
-		for (int i = 0; i < 4; ++i) {
-			for (int j = 0; j < 4; ++j) {
-				file >> mat.array[i][j];
+	Matrix4 mat;
+	int count = 0;
+
+	char* tempStr = new char[14];
+	tempStr[13] = '\0';
+	int strLen = 0;
+
+	char* tempExp = new char[4];
+	tempExp[3] = '\0';
+	int expLen = 0;
+	bool hasExponent = false;
+
+	for (char c : line) {
+		switch (c) {
+		case ',':
+			mat.array[count / 4][count % 4] = StrToFloat(tempStr, tempExp, hasExponent, strLen);
+			count++;
+			if (count == 16) {
+				into.emplace_back(mat);
+				count = 0;
 			}
+			strLen = 0;
+			expLen = 0;
+			hasExponent = false;
+			break;
+		case 'E':
+		case 'e':
+			hasExponent = true;
+			break;
+		default:
+			if (hasExponent) {
+				if (expLen == 0) {
+					if (c == '-') tempExp[expLen] = '-';
+					else tempExp[expLen] = '+';
+				}
+				else tempExp[expLen] = c;
+				expLen++;
+			}
+			else {
+				tempStr[strLen] = c;
+				strLen++;
+			}
+			break;
 		}
-
-		into.emplace_back(mat);
 	}
+	tempStr = nullptr;
+	delete[] tempStr;
+
+	tempExp = nullptr;
+	delete[] tempExp;
 }
 
 void MshLoader::ReadJointParents(std::ifstream& file, std::vector<int>& parentIDs) {
 	int jointCount = 0;
 	file >> jointCount;
 
-	for (int i = 0; i < jointCount; ++i) {
-		int id = -1;
-		file >> id;
-		parentIDs.emplace_back(id);
+	std::string line;
+	file >> line;
+
+	int temp;
+
+	char* tempStr = new char[14];
+	tempStr[13] = '\0';
+	int strLen = 0;
+
+	for (char c : line) {
+		switch (c) {
+		case ',':
+			temp = StrToInt(tempStr, strLen);
+			parentIDs.emplace_back(temp);
+			strLen = 0;
+			break;
+		default:
+			tempStr[strLen] = c;
+			strLen++;
+			break;
+		}
 	}
+	tempStr = nullptr;
+	delete[] tempStr;
 }
 
 void MshLoader::ReadJointNames(std::ifstream& file, std::vector<std::string>& jointNames) {
 	int jointCount = 0;
 	file >> jointCount;
+
+	std::string line;
+	file >> line;
+
 	std::string jointName;
-	std::getline(file, jointName);
+	int strLen = 0;
 
-	for (int i = 0; i < jointCount; ++i) {
-		std::string jointName;
-		std::getline(file, jointName);
-		jointNames.emplace_back(jointName);
+	for (char c : line) {
+		switch (c) {
+		case ',':
+			jointNames.emplace_back(jointName);
+			jointName = "";
+			strLen = 0;
+			break;
+		default:
+			jointName += c;
+			strLen++;
+			break;
+		}
 	}
 }
 
-void MshLoader::ReadSubMeshes(std::ifstream& file, int count, std::vector<SubMesh>& subMeshes) {
-	for (int i = 0; i < count; ++i) {
-		SubMesh m;
-		file >> m.start;
-		file >> m.count;
-		subMeshes.emplace_back(m);
+void MshLoader::ReadSubMeshes(std::ifstream& file, std::vector<SubMesh>& subMeshes) {
+	std::string line;
+	file >> line;
+
+	SubMesh temp;
+	int count = 0;
+
+	char* tempStr = new char[14];
+	tempStr[13] = '\0';
+	int strLen = 0;
+
+	for (char c : line) {
+		switch (c) {
+		case ',':
+			count++;
+			switch (count % 2) {
+			case 0:
+				temp.count = StrToUInt(tempStr, strLen);
+				subMeshes.emplace_back(temp);
+				break;
+			case 1:
+				temp.start = StrToUInt(tempStr, strLen);
+				break;
+			}
+			strLen = 0;
+			break;
+		default:
+			tempStr[strLen] = c;
+			strLen++;
+			break;
+		}
+	}
+
+	tempStr = nullptr;
+	delete[] tempStr;
+}
+
+void MshLoader::ReadSubMeshNames(std::ifstream& file, std::vector<std::string>& subMeshNames) {
+	std::string line;
+	file >> line;
+
+	std::string meshName;
+	int strLen = 0;
+
+	for (char c : line) {
+		switch (c) {
+		case ',':
+			subMeshNames.emplace_back(meshName);
+			meshName = "";
+			strLen = 0;
+			break;
+		default:
+			meshName += c;
+			strLen++;
+			break;
+		}
 	}
 }
 
-void MshLoader::ReadSubMeshNames(std::ifstream& file, int count, std::vector<std::string>& subMeshNames) {
-	std::string scrap;
-	std::getline(file, scrap);
+float MshLoader::StrToFloat(const char* str, const char* exp, const bool hasExponent, int strLen) {
+	bool sign = false;
+	bool decimal = false;
+	bool exponentSign = false;
+	int exponent = 0;
+	double num = 0.0;
+	double factor = 1.0;
 
-	for (int i = 0; i < count; ++i) {
-		std::string meshName;
-		std::getline(file, meshName);
-		subMeshNames.emplace_back(meshName);
+	if (*str == '-') {
+		sign = true;
+		strLen--;
+		str++;
 	}
+
+	for (; strLen > 0; strLen--) {
+		if (*str == '.') {
+			if (decimal) return -1;
+			decimal = true;
+			str++;
+			continue;
+		}
+
+		if (decimal) factor *= 0.1;
+
+		int digit = *str - '0';
+		if (digit < 0 || digit > 9) return -1;
+		if (decimal) num += factor * digit;
+		else num = num * 10.0 + digit;
+		str++;
+	}
+
+	if(hasExponent) {
+		if(*exp == '-') {
+			exponentSign = true;
+		}
+		exp++;
+		exponent = (*exp - '0') * 10;
+		exp++;
+		exponent += *exp - '0';
+		if (exponentSign) exponent = -exponent;
+	}
+
+	num = num * pow(10, exponent);
+
+	if (sign) num = -num;
+	return num;
+}
+
+unsigned int MshLoader::StrToUInt(const char* str, int strLen) {
+	unsigned int num = 0;
+
+	for (; strLen > 0; strLen--) {
+		int digit = *str - '0';
+		if (digit < 0 || digit > 9) return -1;
+		num = num * 10 + digit;
+		str++;
+	}
+
+	return num;
+}
+
+int MshLoader::StrToInt(const char* str, int strLen) {
+	bool sign = false;
+	int num = 0;
+
+	if (*str == '-') {
+		sign = true;
+		strLen--;
+		str++;
+	}
+
+	for (; strLen > 0; strLen--) {
+		int digit = *str - '0';
+		if (digit < 0 || digit > 9) return -1;
+		num = num * 10 + digit;
+		str++;
+	}
+
+	if (sign) num = -num;
+
+	return num;
 }
 
 void* MshLoader::ReadVertexData(GeometryChunkData dataType, GeometryChunkTypes chunkType, int numVertices) {
@@ -275,51 +516,261 @@ void MshLoader::ReadTeReadTextIntsxtFloats(std::ifstream& file, vector<Vector3i>
 	}
 }
 
-void MshLoader::ReadTextInts(std::ifstream& file, vector<Vector4i>& element, int numVertices) {
-	for (int i = 0; i < numVertices; ++i) {
-		Vector4i temp;
-		file >> temp[0];
-		file >> temp[1];
-		file >> temp[2];
-		file >> temp[3];
-		element.emplace_back(temp);
+void MshLoader::ReadTextInts(std::ifstream& file, vector<Vector4i>& element) {
+	std::string line;
+	file >> line;
+
+	Vector4i temp;
+	int count = 0;
+
+	char* tempStr = new char[14];
+	tempStr[13] = '\0';
+	int strLen = 0;
+
+	for (char c : line) {
+		switch (c) {
+		case ',':
+			count++;
+			switch(count % 4) {
+			case 0:
+				temp[3] = StrToUInt(tempStr, strLen);
+				element.emplace_back(temp);
+				break;
+			case 1:
+				temp[0] = StrToUInt(tempStr, strLen);
+				break;
+			case 2:
+				temp[1] = StrToUInt(tempStr, strLen);
+				break;
+			case 3:
+				temp[2] = StrToUInt(tempStr, strLen);
+				break;
+			}
+			strLen = 0;
+			break;
+		default:
+			tempStr[strLen] = c;
+			strLen++;
+			break;
+		}
 	}
+	tempStr = nullptr;
+	delete[] tempStr;
 }
 
-void MshLoader::ReadTextFloats(std::ifstream& file, vector<Vector2>& element, int numVertices) {
-	for (int i = 0; i < numVertices; ++i) {
-		Vector2 temp;
-		file >> temp.x;
-		file >> temp.y;
-		element.emplace_back(temp);
+void MshLoader::ReadTextFloats(std::ifstream& file, vector<Vector2>& element) {
+	std::string line;
+	file >> line;
+
+	Vector2 temp;
+	int count = 0;
+
+	char* tempStr = new char[14];
+	tempStr[13] = '\0';
+	int strLen = 0;
+
+	char* tempExp = new char[4];
+	tempExp[3] = '\0';
+	int expLen = 0;
+	bool hasExponent = false;
+
+	for (char c : line) {
+		switch (c) {
+		case ',':
+			count++;
+			switch (count % 2) {
+			case 0:
+				temp.y = StrToFloat(tempStr, tempExp, hasExponent, strLen);
+				element.emplace_back(temp);
+				break;
+			case 1:
+				temp.x = StrToFloat(tempStr, tempExp, hasExponent, strLen);
+				break;
+			}
+			strLen = 0;
+			expLen = 0;
+			hasExponent = false;
+			break;
+		case 'E':
+		case 'e':
+			hasExponent = true;
+			break;
+		default:
+			if (hasExponent) {
+				if (expLen == 0) {
+					if (c == '-') tempExp[expLen] = '-';
+					else tempExp[expLen] = '+';
+				}
+				else tempExp[expLen] = c;
+				expLen++;
+			}
+			else {
+				tempStr[strLen] = c;
+				strLen++;
+			}
+			break;
+		}
 	}
+	tempStr = nullptr;
+	delete[] tempStr;
+
+	tempExp = nullptr;
+	delete[] tempExp;
 }
 
-void MshLoader::ReadTextFloats(std::ifstream& file, vector<Vector3>& element, int numVertices) {
-	for (int i = 0; i < numVertices; ++i) {
-		Vector3 temp;
-		file >> temp.x;
-		file >> temp.y;
-		file >> temp.z;
-		element.emplace_back(temp);
+void MshLoader::ReadTextFloats(std::ifstream& file, vector<Vector3>& element) {
+	std::string line;
+	file >> line;
+
+	Vector3 temp;
+	int count = 0;
+
+	char* tempStr = new char[14];
+	tempStr[13] = '\0';
+	int strLen = 0;
+	
+	char* tempExp = new char[4];
+	tempExp[3] = '\0';
+	int expLen = 0;
+	bool hasExponent = false;
+
+	for(char c : line) {
+		switch(c) {
+		case ',':
+			count++;
+			switch(count % 3) {
+			case 0:
+				temp.z = StrToFloat(tempStr, tempExp, hasExponent, strLen);
+				element.emplace_back(temp);
+				break;
+			case 1:
+				temp.x = StrToFloat(tempStr, tempExp, hasExponent, strLen);
+				break;
+			case 2:
+				temp.y = StrToFloat(tempStr, tempExp, hasExponent, strLen);
+				break;
+			}
+			strLen = 0;
+			expLen = 0;
+			hasExponent = false;
+			break;
+		case 'E':
+		case 'e':
+			hasExponent = true;
+			break;
+		default:
+			if(hasExponent) {
+				if (expLen == 0) {
+					if (c == '-') tempExp[expLen] = '-';
+					else tempExp[expLen] = '+';
+				}
+				else tempExp[expLen] = c;
+				expLen++;
+			}
+			else {
+				tempStr[strLen] = c;
+				strLen++;
+			}
+			break;
+		}
 	}
+	tempStr = nullptr;
+	delete[] tempStr;
+
+	tempExp = nullptr;
+	delete[] tempExp;
 }
 
-void MshLoader::ReadTextFloats(std::ifstream& file, vector<Vector4>& element, int numVertices) {
-	for (int i = 0; i < numVertices; ++i) {
-		Vector4 temp;
-		file >> temp.x;
-		file >> temp.y;
-		file >> temp.z;
-		file >> temp.w;
-		element.emplace_back(temp);
+void MshLoader::ReadTextFloats(std::ifstream& file, vector<Vector4>& element) {
+	std::string line;
+	file >> line;
+
+	Vector4 temp;
+	int count = 0;
+
+	char* tempStr = new char[14];
+	tempStr[13] = '\0';
+	int strLen = 0;
+
+	char* tempExp = new char[4];
+	tempExp[3] = '\0';
+	int expLen = 0;
+	bool hasExponent = false;
+
+	for (char c : line) {
+		switch (c) {
+		case ',':
+			count++;
+			switch (count % 4) {
+			case 0:
+				temp.w = StrToFloat(tempStr, tempExp, hasExponent, strLen);
+				element.emplace_back(temp);
+				break;
+			case 1:
+				temp.x = StrToFloat(tempStr, tempExp, hasExponent, strLen);
+				break;
+			case 2:
+				temp.y = StrToFloat(tempStr, tempExp, hasExponent, strLen);
+				break;
+			case 3:
+				temp.z = StrToFloat(tempStr, tempExp, hasExponent, strLen);
+				break;
+			}
+			strLen = 0;
+			expLen = 0;
+			hasExponent = false;
+			break;
+		case 'E':
+		case 'e':
+			hasExponent = true;
+			break;
+		default:
+			if (hasExponent) {
+				if (expLen == 0) {
+					if (c == '-') tempExp[expLen] = '-';
+					else tempExp[expLen] = '+';
+				}
+				else tempExp[expLen] = c;
+				expLen++;
+			}
+			else {
+				tempStr[strLen] = c;
+				strLen++;
+			}
+			break;
+		}
 	}
+	tempStr = nullptr;
+	delete[] tempStr;
+
+	tempExp = nullptr;
+	delete[] tempExp;
 }
 
-void MshLoader::ReadIntegers(std::ifstream& file, vector<unsigned int>& elements, int intCount) {
-	for (int i = 0; i < intCount; ++i) {
-		unsigned int temp;
-		file >> temp;
-		elements.emplace_back(temp);
+void MshLoader::ReadIntegers(std::ifstream& file, vector<unsigned int>& elements) {
+	std::string line;
+	file >> line;
+
+	unsigned int temp;
+
+	char* tempStr = new char[14];
+	tempStr[13] = '\0';
+	int strLen = 0;
+
+	for (char c : line) {
+		switch (c) {
+		case ',':
+			temp = StrToUInt(tempStr, strLen);
+			elements.emplace_back(temp);
+			strLen = 0;
+			break;
+		default:
+			tempStr[strLen] = c;
+			strLen++;
+			break;
+		}
 	}
+
+	tempStr = nullptr;
+	delete[] tempStr;
 }

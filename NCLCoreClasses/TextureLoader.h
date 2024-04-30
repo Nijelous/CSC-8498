@@ -28,6 +28,11 @@ namespace NCL {
 
 		static void DeleteTextureData(char* data);
 	protected:
+		static unsigned int StrToUInt(const char* str, int strLen);
+
+		static void CreateTexFile(const std::string& filename, char*& outdata, int& width, int& height, int& channels, int& flags);
+
+		static unsigned char* LoadTexFile(const std::string& filename, char*& outData, int* width, int* height, int* channels, int* flags);
 
 		static std::string GetFileExtension(const std::string& fileExtension);
 
