@@ -1,5 +1,7 @@
+#include <filesystem>
 #include <mutex>
 
+#include "Assets.h"
 #include "imgui/imgui_impl_win32.h"
 #ifdef USEGL
 
@@ -884,7 +886,77 @@ Texture* GameTechRenderer::LoadTexture(const std::string& name) {
 	return tex;
 }
 
+std::vector<std::string> GameTechRenderer::SortTextures(const std::vector<std::string>& details) {
+	std::vector<double> filesizes;
+	std::vector<int> indexes;
+	for (int i = 0; i < details.size(); i += 3) {
+		std::string textureFilename = details[i + 1].substr(0, details[i + 1].find('.')) + ".texture";
+
+		std::filesystem::path path(details[i + 1]);
+
+		std::string realPath = path.is_absolute() ? textureFilename : Assets::TEXTUREDIR + textureFilename;
+
+		filesizes.emplace_back(filesystem::file_size(realPath) / 1048576.0);
+		indexes.emplace_back(i/3);
+	}
+	// Sorting Algorithm
+	for(int i = filesizes.size()-1; i > 0; i--) {
+		for(int j = 0; j < i; j++) {
+			if(filesizes[j] > filesizes[i]) {
+				double tempd = filesizes[j];
+				filesizes[j] = filesizes[i];
+				filesizes[i] = tempd;
+
+				int tempi = indexes[j];
+				indexes[j] = indexes[i];
+				indexes[i] = tempi;
+			}
+		}
+	}
+
+	vector<string> newDetails;
+	vector totals = { 0.0, 0.0, 0.0, 0.0 };
+	//vector<vector<double>> groups = { {}, {}, {}, {} };
+	vector<vector<int>> groupIndexes = { {}, {}, {}, {} };
+	for(int i = filesizes.size() - 1; i >= 0; i--) {
+		if(totals.size() == 1) {
+			totals[0] += filesizes[i];
+			newDetails.emplace_back(details[indexes[i] * 3]);
+			newDetails.emplace_back(details[(indexes[i] * 3) + 1]);
+			newDetails.emplace_back(details[(indexes[i] * 3) + 2]);
+			continue;
+		}
+		auto minIter = std::ranges::min_element(totals);
+		int minIndex = std::distance(totals.begin(), minIter);
+		totals[minIndex] += filesizes[i];
+		//groups[minIndex].emplace_back(filesizes[i]);
+		groupIndexes[minIndex].emplace_back(indexes[i]);
+		if(groupIndexes[minIndex].size() == filesizes.size()/4) {
+			//std::cout << totals[minIndex] << ":\n";
+			for (int j = 0; j < filesizes.size() / 4; j++) {
+				//std::cout << details[groupIndexes[minIndex][j] * 3] << ": " << groups[minIndex][j] << "\n";
+				newDetails.emplace_back(details[groupIndexes[minIndex][j] * 3]);
+				newDetails.emplace_back(details[(groupIndexes[minIndex][j] * 3) + 1]);
+				newDetails.emplace_back(details[(groupIndexes[minIndex][j] * 3) + 2]);
+			}
+			totals.erase(minIter);
+			//groups.erase(groups.begin() + minIndex);
+			groupIndexes.erase(groupIndexes.begin() + minIndex);
+			if(totals.size() == 1) {
+				for (int j = 0; j < groupIndexes[0].size(); j++) {
+					newDetails.emplace_back(details[groupIndexes[0][j] * 3]);
+					newDetails.emplace_back(details[(groupIndexes[0][j] * 3) + 1]);
+					newDetails.emplace_back(details[(groupIndexes[0][j] * 3) + 2]);
+				}
+			}
+		}
+	}
+	//std::cout << totals[0] << "\n";
+	return newDetails;
+}
+
 void GameTechRenderer::LoadTextures(std::unordered_map<std::string, Texture*>& textureMap, const std::vector<std::string>& details) {
+	std::vector<string> sortedDetails = SortTextures(details);
 	int loadSplit = details.size() / 12;
 	std::thread fileLoadThreads[4];
 	std::vector<char*> texData;
@@ -898,10 +970,10 @@ void GameTechRenderer::LoadTextures(std::unordered_map<std::string, Texture*>& t
 	std::vector<int> flags;
 	std::fill_n(std::back_inserter(flags), details.size() / 3, 0);
 	for (int i = 0; i < 4; i++) {
-		fileLoadThreads[i] = std::thread([details, i, loadSplit, &texData, &widths, &heights, &channels, &flags] {
-			int endPoint = i == 3 ? details.size() / 3 : loadSplit * (i + 1);
+		fileLoadThreads[i] = std::thread([sortedDetails, i, loadSplit, &texData, &widths, &heights, &channels, &flags] {
+			int endPoint = i == 3 ? sortedDetails.size() / 3 : loadSplit * (i + 1);
 			for (int j = loadSplit * i; j < endPoint; j++) {
-				TextureLoader::LoadTexture(details[(j * 3) + 1], texData[j], widths[j], 
+				TextureLoader::LoadTexture(sortedDetails[(j * 3) + 1], texData[j], widths[j],
 					heights[j], channels[j], flags[j]);
 			}
 			});
@@ -915,8 +987,8 @@ void GameTechRenderer::LoadTextures(std::unordered_map<std::string, Texture*>& t
 			const GLuint64 handle = glGetTextureHandleARB(tex->GetObjectID());
 			glMakeTextureHandleResidentARB(handle);
 			mTextureHandles.push_back(std::pair<GLuint, GLuint64>(tex->GetObjectID(), handle));
-			mLoadedTextures[details[i * 3]] = tex->GetObjectID();
-			textureMap[details[i * 3]] = tex;
+			mLoadedTextures[sortedDetails[i * 3]] = tex->GetObjectID();
+			textureMap[sortedDetails[i * 3]] = tex;
 		}
 		free(texData[i]);
 	}

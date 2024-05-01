@@ -31,6 +31,7 @@ namespace NCL {
 			Mesh*		LoadMesh(const std::string& name) override;
 			void		LoadMeshes(std::unordered_map<std::string, Mesh*>& meshMap, const std::vector<std::string>& details);
 			Texture*	LoadTexture(const std::string& name) override;
+			vector<string>	SortTextures(const std::vector<std::string>& details);
 			void		LoadTextures(std::unordered_map<std::string, Texture*>& textureMap, const std::vector<std::string>& details);
 			GLuint		LoadTextureGetID(const std::string& name);
 			Texture* LoadDebugTexture(const std::string& name) override;
