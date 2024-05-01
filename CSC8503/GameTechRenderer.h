@@ -38,6 +38,8 @@ namespace NCL {
 			MeshAnimation* LoadAnimation(const std::string& name) override;
 			MeshMaterial* LoadMaterial(const std::string& name) override;
 			std::vector<int> LoadMeshMaterial(Mesh& mesh, MeshMaterial& meshMaterial);
+			void LoadMeshMaterials(std::unordered_map<std::string, Mesh*>& meshMap, std::unordered_map<std::string, MeshMaterial*>& materialMap, 
+				std::unordered_map<std::string, vector<int>>& meshMaterialMap);
 			
 
 			void AddLight(Light* light);

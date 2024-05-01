@@ -594,11 +594,6 @@ void LevelManager::InitialiseAssets() {
 				mRenderer->LoadTextures(mTextures, groupDetails);
 				textureCount = groupDetails.size() / 3;
 				texturesLoaded = true;
-				/*for (int i = 0; i < groupDetails.size(); i += 3) {
-					CheckRenderLoadScreen(updateScreen, lines + animLines + matLines, fileSize);
-					mTextures[groupDetails[i]] = mRenderer->LoadTexture(groupDetails[i + 1]);
-					lines++;
-				}*/
 			}
 			else if (groupType == "sdr") {
 				for (int i = 0; i < groupDetails.size(); i += 3) {
@@ -645,16 +640,8 @@ void LevelManager::InitialiseAssets() {
 	mUi->SetTextureVector("bar", susTexVec);
 
 	matLoadThread.join();
-	for (auto const& [key, val] : mMaterials) {
-		CheckRenderLoadScreen(updateScreen, lines + animLines + matLines, fileSize);
-		if (key.substr(0, 6) == "Player") {
-			mMeshMaterials[key] = mRenderer->LoadMeshMaterial(*mMeshes["Player"], *val);
-		}
-		else {
-			mMeshMaterials[key] = mRenderer->LoadMeshMaterial(*mMeshes[key], *val);
-		}
-		lines++;
-	}
+	mRenderer->LoadMeshMaterials(mMeshes, mMaterials, mMeshMaterials);
+	lines += mMaterials.size();
 	loaded = true;
 	renderFlip.join();
 	CheckRenderLoadScreen(updateScreen, 100, 100);
