@@ -55,13 +55,13 @@ UniqueOGLTexture OGLTexture::TextureFromData(char* data, int width, int height, 
 	return tex;
 }
 
-UniqueOGLTexture OGLTexture::TextureFromFile(const std::string&name) {
+UniqueOGLTexture OGLTexture::TextureFromFile(const std::string&name, bool resize) {
 	char* texData	= nullptr;
 	int width		= 0;
 	int height		= 0;
 	int channels	= 0;
 	int flags		= 0;
-	TextureLoader::LoadTexture(name, texData, width, height, channels, flags);  
+	TextureLoader::LoadTexture(name, texData, width, height, channels, flags, resize);  
 
 	UniqueOGLTexture glTex = TextureFromData(texData, width, height, channels);
 

@@ -23,7 +23,7 @@ namespace NCL::Rendering {
 
 		static UniqueOGLTexture TextureFromData(char* data, int width, int height, int channels);
 
-		static UniqueOGLTexture TextureFromFile(const std::string&name);
+		static UniqueOGLTexture TextureFromFile(const std::string&name, bool resize = true);
 
 		static UniqueOGLTexture LoadCubemap(
 			const std::string& xPosFile,

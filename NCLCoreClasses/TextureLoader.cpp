@@ -19,15 +19,18 @@ https://research.ncl.ac.uk/game/
 using namespace NCL;
 using namespace Rendering;
 
+int constexpr MAX_FILE_SIZE = 512;
+
 std::map<std::string, TextureLoadFunction> TextureLoader::fileHandlers;
 
-bool TextureLoader::LoadTexture(const std::string& filename, char*& outData, int& width, int &height, int &channels, int&flags) {
+bool TextureLoader::LoadTexture(const std::string& filename, char*& outData, int& width, int &height, int &channels, int&flags, bool resize) {
 	if (filename.empty()) {
 		std::cout << "fail1"+filename << std::endl;
 		return false;
 	}
 
 	bool highestQuality = false;
+	bool createTextureFiles = true;
 
 	/*if(unsigned char* inData = LoadTxtrFile(filename, outData, &width, &height, &channels, &flags)) {
 		outData = (char*)inData;
@@ -61,7 +64,7 @@ bool TextureLoader::LoadTexture(const std::string& filename, char*& outData, int
 
 	if (!texData) {
 		texData = stbi_load(realPath.c_str(), &width, &height, &channels, 4); //4 forces this to always be rgba!
-		if(texData) CreateTextureFile(filename, texData, width, height);
+		if(texData && createTextureFiles) CreateTextureFile(filename, texData, width, height, resize);
 	}
 
 	channels = 4; //it gets forced, we don't care about the 'real' channel size
@@ -209,10 +212,10 @@ unsigned char* TextureLoader::LoadTxtrFile(const std::string& filename, char*& o
 	return nullptr;
 }
 
-void TextureLoader::CreateTextureFile(const std::string& filename, unsigned char* texData, int& width, int& height) {
+void TextureLoader::CreateTextureFile(const std::string& filename, unsigned char* texData, int& width, int& height, bool resize) {
 	stbi_uc* texture = nullptr;
 	int newWidth, newHeight;
-	bool resize = false;
+	bool resized = false;
 
 	std::string texFilename = filename.substr(0, filename.find('.')) + ".texture";
 
@@ -222,10 +225,14 @@ void TextureLoader::CreateTextureFile(const std::string& filename, unsigned char
 
 	std::string realPath = isAbsolute ? texFilename : Assets::TEXTUREDIR + texFilename;
 
-	if(width > 512 && height > 512) {
-		resize = true;
-		newWidth = width / 2;
-		newHeight = height / 2;
+	if(width > MAX_FILE_SIZE && height > MAX_FILE_SIZE && resize) {
+		resized = true;
+		newWidth = width;
+		newHeight = height;
+		while (newWidth > MAX_FILE_SIZE && newHeight > MAX_FILE_SIZE) {
+			newWidth = newWidth / 2;
+			newHeight = newHeight / 2;
+		}
 		texture = (stbi_uc*)malloc(newWidth * newHeight * 4);
 		stbir_resize_uint8(texData, width, height, 0, texture, newWidth, newHeight, 0, 4);
 	}
@@ -238,7 +245,7 @@ void TextureLoader::CreateTextureFile(const std::string& filename, unsigned char
 		std::cout << "Failed to create .texture file for " << texFilename << "\n";
 		return;
 	}
-	if (resize) {
+	if (resized) {
 		free(texture);
 		texture = nullptr;
 	}

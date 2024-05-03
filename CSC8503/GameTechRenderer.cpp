@@ -751,7 +751,71 @@ Mesh* GameTechRenderer::LoadMesh(const std::string& name) {
 	return mesh;
 }
 
+vector<string> GameTechRenderer::SortMeshes(const std::vector<std::string>& details) {
+	std::vector<double> filesizes;
+	std::vector<int> indexes;
+	for (int i = 0; i < details.size(); i += 3) {
+		std::string filename = details[i + 1];
+
+		std::filesystem::path path(details[i + 1]);
+
+		std::string realPath = path.is_absolute() ? filename : Assets::MESHDIR + filename;
+
+		filesizes.emplace_back(filesystem::file_size(realPath) / 1048576.0);
+		indexes.emplace_back(i / 3);
+	}
+	// Sorting Algorithm
+	for (int i = filesizes.size() - 1; i > 0; i--) {
+		for (int j = 0; j < i; j++) {
+			if (filesizes[j] > filesizes[i]) {
+				double tempd = filesizes[j];
+				filesizes[j] = filesizes[i];
+				filesizes[i] = tempd;
+
+				int tempi = indexes[j];
+				indexes[j] = indexes[i];
+				indexes[i] = tempi;
+			}
+		}
+	}
+
+	vector<string> newDetails;
+	vector totals = { 0.0, 0.0, 0.0, 0.0 };
+	vector<vector<int>> groupIndexes = { {}, {}, {}, {} };
+	for (int i = filesizes.size() - 1; i >= 0; i--) {
+		if (totals.size() == 1) {
+			totals[0] += filesizes[i];
+			newDetails.emplace_back(details[indexes[i] * 3]);
+			newDetails.emplace_back(details[(indexes[i] * 3) + 1]);
+			newDetails.emplace_back(details[(indexes[i] * 3) + 2]);
+			continue;
+		}
+		auto minIter = std::ranges::min_element(totals);
+		int minIndex = std::distance(totals.begin(), minIter);
+		totals[minIndex] += filesizes[i];
+		groupIndexes[minIndex].emplace_back(indexes[i]);
+		if (groupIndexes[minIndex].size() == filesizes.size() / 4) {
+			for (int j = 0; j < filesizes.size() / 4; j++) {
+				newDetails.emplace_back(details[groupIndexes[minIndex][j] * 3]);
+				newDetails.emplace_back(details[(groupIndexes[minIndex][j] * 3) + 1]);
+				newDetails.emplace_back(details[(groupIndexes[minIndex][j] * 3) + 2]);
+			}
+			totals.erase(minIter);
+			groupIndexes.erase(groupIndexes.begin() + minIndex);
+			if (totals.size() == 1) {
+				for (int j = 0; j < groupIndexes[0].size(); j++) {
+					newDetails.emplace_back(details[groupIndexes[0][j] * 3]);
+					newDetails.emplace_back(details[(groupIndexes[0][j] * 3) + 1]);
+					newDetails.emplace_back(details[(groupIndexes[0][j] * 3) + 2]);
+				}
+			}
+		}
+	}
+	return newDetails;
+}
+
 void GameTechRenderer::LoadMeshes(std::unordered_map<std::string, Mesh*>& meshMap, const std::vector<std::string>& details) {
+	std::vector sortedDetails = SortMeshes(details);
 	std::vector<OGLMesh*> meshes;
 	for (int i = 0; i < details.size(); i += 3) {
 		meshes.push_back(new OGLMesh());
@@ -759,10 +823,10 @@ void GameTechRenderer::LoadMeshes(std::unordered_map<std::string, Mesh*>& meshMa
 	int loadSplit = details.size() / 12;
 	std::thread fileLoadThreads[4];
 	for (int i = 0; i < 4; i++) {
-		fileLoadThreads[i] = std::thread([meshes, details, i, loadSplit] {
-			int endPoint = i == 3 ? details.size() / 3 : loadSplit * (i + 1);
+		fileLoadThreads[i] = std::thread([meshes, sortedDetails, i, loadSplit] {
+			int endPoint = i == 3 ? sortedDetails.size() / 3 : loadSplit * (i + 1);
 			for (int j = loadSplit * i; j < endPoint; j++) {
-				MshLoader::LoadMesh(details[(j * 3) + 1], *meshes[j]);
+				MshLoader::LoadMesh(sortedDetails[(j * 3) + 1], *meshes[j]);
 				meshes[j]->SetPrimitiveType(GeometryPrimitive::Triangles);
 			}
 			});
@@ -772,7 +836,7 @@ void GameTechRenderer::LoadMeshes(std::unordered_map<std::string, Mesh*>& meshMa
 	}
 	for (int i = 0; i < meshes.size(); i++) {
 		meshes[i]->UploadToGPU();
-		meshMap[details[i*3]] = meshes[i];
+		meshMap[sortedDetails[i*3]] = meshes[i];
 	}
 }
 
@@ -891,6 +955,7 @@ std::vector<std::string> GameTechRenderer::SortTextures(const std::vector<std::s
 	std::vector<int> indexes;
 	for (int i = 0; i < details.size(); i += 3) {
 		std::string textureFilename = details[i + 1].substr(0, details[i + 1].find('.')) + ".texture";
+		//std::string textureFilename = details[i + 1];
 
 		std::filesystem::path path(details[i + 1]);
 
@@ -1003,7 +1068,7 @@ GLuint GameTechRenderer::LoadTextureGetID(const std::string& name) {
 }
 
 Texture* GameTechRenderer::LoadDebugTexture(const std::string& name) {
-	OGLTexture* tex = OGLTexture::TextureFromFile(name).release();
+	OGLTexture* tex = OGLTexture::TextureFromFile(name, false).release();
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, tex->GetObjectID());	
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -1076,13 +1141,51 @@ void GameTechRenderer::LoadMeshMaterials(std::unordered_map<std::string, Mesh*>&
 	std::mutex mutex;
 
 	std::unordered_map<string, int> loadStatus;
-	std::unordered_map<string, vector<int>> unassignedMeshMaterialMap;
+	std::unordered_map<string, vector<string>> unassignedMeshMaterialMap;
 	std::vector<string> paths;
 	std::vector<char*> texData;
 	std::vector<int> widths;
 	std::vector<int> heights;
 	std::vector<int> channels;
 	std::vector<int> flags;
+
+	int count = 0;
+	for(int i = 0; i < keys.size(); i++) {
+		vector<string> matTextures;
+		int meshCount = keys[i].substr(0, 6) == "Player" ? meshMap.at("Player")->GetSubMeshCount() : meshMap.at(keys[i])->GetSubMeshCount();
+		for(int j = 0; j < meshCount; j++) {
+			const MeshMaterialEntry* matEntry = materialMap.at(keys[i])->GetMaterialForLayer(j);
+			const string* filename = nullptr;
+			matEntry->GetEntry("Diffuse", &filename);
+
+			if(filename) {
+				string path = *filename;
+				matTextures.emplace_back(path);
+				if(!loadStatus.contains(path)) {
+					paths.emplace_back(path);
+				}
+			}
+			else {
+				matTextures.emplace_back("");
+			}
+
+			filename = nullptr;
+			matEntry->GetEntry("Normal", &filename);
+
+			if (filename) {
+				string path = *filename;
+				if (loadStatus.contains(path)) {
+					matTextures.emplace_back(loadStatus[path]);
+				}
+				else {
+					loadStatus[path] = count;
+					count++;
+					paths.emplace_back(path);
+				}
+			}
+		}
+		unassignedMeshMaterialMap[keys[i]] = matTextures;
+	}
 
 	for (int i = 0; i < 4; i++) {
 		fileLoadThreads[i] = std::thread([&mutex, meshMap, materialMap, &unassignedMeshMaterialMap, keys, i, 

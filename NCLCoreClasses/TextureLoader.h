@@ -22,7 +22,7 @@ namespace NCL {
 
 	class TextureLoader	{
 	public:
-		static bool LoadTexture(const std::string& filename, char*& outData, int& width, int &height, int &channels, int&flags);
+		static bool LoadTexture(const std::string& filename, char*& outData, int& width, int &height, int &channels, int&flags, bool resize = true);
 
 		static void RegisterTextureLoadFunction(TextureLoadFunction f, const std::string&fileExtension);
 
@@ -34,7 +34,7 @@ namespace NCL {
 
 		static unsigned char* LoadTxtrFile(const std::string& filename, char*& outData, int* width, int* height, int* channels, int* flags);
 
-		static void CreateTextureFile(const std::string& filename, unsigned char* texData, int& width, int& height);
+		static void CreateTextureFile(const std::string& filename, unsigned char* texData, int& width, int& height, bool resize);
 
 		static std::string GetFileExtension(const std::string& fileExtension);
 

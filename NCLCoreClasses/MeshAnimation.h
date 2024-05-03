@@ -43,6 +43,8 @@ namespace NCL::Rendering {
 		const Maths::Matrix4* GetJointData(size_t frame) const;
 
 	protected:
+		static float StrToFloat(const char* str, const char* exp, const bool hasExponent, int strLen);
+
 		size_t		jointCount;
 		size_t		frameCount;
 		float		frameRate;

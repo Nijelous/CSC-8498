@@ -38,17 +38,107 @@ MeshAnimation::MeshAnimation(const std::string& filename) : MeshAnimation() {
 
 	allJoints.reserve((size_t)frameCount * jointCount);
 
-	for (unsigned int frame = 0; frame < frameCount; ++frame) {
-		for (unsigned int joint = 0; joint < jointCount; ++joint) {
-			Matrix4 mat;
-			for (int i = 0; i < 4; ++i) {
-				for (int j = 0; j < 4; ++j) {
-					file >> mat.array[i][j];
-				}
+	std::string line;
+	file >> line;
+
+	Matrix4 mat;
+	int count = 0;
+
+	char* tempStr = new char[14];
+	tempStr[13] = '\0';
+	int strLen = 0;
+
+	char* tempExp = new char[4];
+	tempExp[3] = '\0';
+	int expLen = 0;
+	bool hasExponent = false;
+
+	for (char c : line) {
+		switch (c) {
+		case ',':
+			mat.array[count / 4][count % 4] = StrToFloat(tempStr, tempExp, hasExponent, strLen);
+			count++;
+			if (count == 16) {
+				allJoints.emplace_back(mat);
+				count = 0;
 			}
-			allJoints.emplace_back(mat);
+			strLen = 0;
+			expLen = 0;
+			hasExponent = false;
+			break;
+		case 'E':
+		case 'e':
+			hasExponent = true;
+			break;
+		default:
+			if (hasExponent) {
+				if (expLen == 0) {
+					if (c == '-') tempExp[expLen] = '-';
+					else tempExp[expLen] = '+';
+				}
+				else tempExp[expLen] = c;
+				expLen++;
+			}
+			else {
+				tempStr[strLen] = c;
+				strLen++;
+			}
+			break;
 		}
 	}
+	tempStr = nullptr;
+	delete[] tempStr;
+
+	tempExp = nullptr;
+	delete[] tempExp;
+}
+
+float MeshAnimation::StrToFloat(const char* str, const char* exp, const bool hasExponent, int strLen) {
+	bool sign = false;
+	bool decimal = false;
+	bool exponentSign = false;
+	int exponent = 0;
+	double num = 0.0;
+	double factor = 1.0;
+
+	if (*str == '-') {
+		sign = true;
+		strLen--;
+		str++;
+	}
+
+	for (; strLen > 0; strLen--) {
+		if (*str == '.') {
+			if (decimal) return -1;
+			decimal = true;
+			str++;
+			continue;
+		}
+
+		if (decimal) factor *= 0.1;
+
+		int digit = *str - '0';
+		if (digit < 0 || digit > 9) return -1;
+		if (decimal) num += factor * digit;
+		else num = num * 10.0 + digit;
+		str++;
+	}
+
+	if (hasExponent) {
+		if (*exp == '-') {
+			exponentSign = true;
+		}
+		exp++;
+		exponent = (*exp - '0') * 10;
+		exp++;
+		exponent += *exp - '0';
+		if (exponentSign) exponent = -exponent;
+	}
+
+	num = num * pow(10, exponent);
+
+	if (sign) num = -num;
+	return num;
 }
 
 MeshAnimation::~MeshAnimation() {
