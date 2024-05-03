@@ -954,8 +954,8 @@ std::vector<std::string> GameTechRenderer::SortTextures(const std::vector<std::s
 	std::vector<double> filesizes;
 	std::vector<int> indexes;
 	for (int i = 0; i < details.size(); i += 3) {
-		std::string textureFilename = details[i + 1].substr(0, details[i + 1].find('.')) + ".texture";
-		//std::string textureFilename = details[i + 1];
+		//std::string textureFilename = details[i + 1].substr(0, details[i + 1].find('.')) + ".texture";
+		std::string textureFilename = details[i + 1];
 
 		std::filesystem::path path(details[i + 1]);
 
@@ -1128,6 +1128,64 @@ std::vector<int> NCL::CSC8503::GameTechRenderer::LoadMeshMaterial(Mesh& mesh, Me
 	return matTextures;
 }
 
+vector<string> NCL::CSC8503::GameTechRenderer::SortMaterialTextures(const std::vector<std::string>& details) {
+	std::vector<double> filesizes;
+	std::vector<int> indexes;
+	for (int i = 0; i < details.size(); i ++) {
+		//std::string textureFilename = details[i].substr(0, details[i].find('.')) + ".texture";
+		std::string textureFilename = details[i];
+
+		std::filesystem::path path(details[i]);
+
+		std::string realPath = path.is_absolute() ? textureFilename : Assets::TEXTUREDIR + textureFilename;
+
+		filesizes.emplace_back(filesystem::file_size(realPath) / 1048576.0);
+		indexes.emplace_back(i);
+	}
+	// Sorting Algorithm
+	for (int i = filesizes.size() - 1; i > 0; i--) {
+		for (int j = 0; j < i; j++) {
+			if (filesizes[j] > filesizes[i]) {
+				double tempd = filesizes[j];
+				filesizes[j] = filesizes[i];
+				filesizes[i] = tempd;
+
+				int tempi = indexes[j];
+				indexes[j] = indexes[i];
+				indexes[i] = tempi;
+			}
+		}
+	}
+
+	vector<string> newDetails;
+	vector totals = { 0.0, 0.0, 0.0, 0.0 };
+	vector<vector<int>> groupIndexes = { {}, {}, {}, {} };
+	for (int i = filesizes.size() - 1; i >= 0; i--) {
+		if (totals.size() == 1) {
+			totals[0] += filesizes[i];
+			newDetails.emplace_back(details[indexes[i]]);
+			continue;
+		}
+		auto minIter = std::ranges::min_element(totals);
+		int minIndex = std::distance(totals.begin(), minIter);
+		totals[minIndex] += filesizes[i];
+		groupIndexes[minIndex].emplace_back(indexes[i]);
+		if (groupIndexes[minIndex].size() == filesizes.size() / 4) {
+			for (int j = 0; j < filesizes.size() / 4; j++) {
+				newDetails.emplace_back(details[groupIndexes[minIndex][j]]);
+			}
+			totals.erase(minIter);
+			groupIndexes.erase(groupIndexes.begin() + minIndex);
+			if (totals.size() == 1) {
+				for (int j = 0; j < groupIndexes[0].size(); j++) {
+					newDetails.emplace_back(details[groupIndexes[0][j]]);
+				}
+			}
+		}
+	}
+	return newDetails;
+}
+
 void GameTechRenderer::LoadMeshMaterials(std::unordered_map<std::string, Mesh*>& meshMap, 
 	std::unordered_map<std::string, MeshMaterial*>& materialMap, 
 	std::unordered_map<std::string, vector<int>>& meshMaterialMap) {
@@ -1136,18 +1194,8 @@ void GameTechRenderer::LoadMeshMaterials(std::unordered_map<std::string, Mesh*>&
 		keys.emplace_back(key);
 	}
 
-	int loadSplit = keys.size() / 4;
-	std::thread fileLoadThreads[4];
-	std::mutex mutex;
-
-	std::unordered_map<string, int> loadStatus;
 	std::unordered_map<string, vector<string>> unassignedMeshMaterialMap;
 	std::vector<string> paths;
-	std::vector<char*> texData;
-	std::vector<int> widths;
-	std::vector<int> heights;
-	std::vector<int> channels;
-	std::vector<int> flags;
 
 	int count = 0;
 	for(int i = 0; i < keys.size(); i++) {
@@ -1161,7 +1209,7 @@ void GameTechRenderer::LoadMeshMaterials(std::unordered_map<std::string, Mesh*>&
 			if(filename) {
 				string path = *filename;
 				matTextures.emplace_back(path);
-				if(!loadStatus.contains(path)) {
+				if(find(paths.begin(), paths.end(), path) == paths.end()) {
 					paths.emplace_back(path);
 				}
 			}
@@ -1174,126 +1222,64 @@ void GameTechRenderer::LoadMeshMaterials(std::unordered_map<std::string, Mesh*>&
 
 			if (filename) {
 				string path = *filename;
-				if (loadStatus.contains(path)) {
-					matTextures.emplace_back(loadStatus[path]);
-				}
-				else {
-					loadStatus[path] = count;
-					count++;
+				matTextures.emplace_back(path);
+				if (find(paths.begin(), paths.end(), path) == paths.end()) {
 					paths.emplace_back(path);
 				}
+			}
+			else {
+				matTextures.emplace_back("");
 			}
 		}
 		unassignedMeshMaterialMap[keys[i]] = matTextures;
 	}
 
-	for (int i = 0; i < 4; i++) {
-		fileLoadThreads[i] = std::thread([&mutex, meshMap, materialMap, &unassignedMeshMaterialMap, keys, i, 
-			loadSplit, &loadStatus, &texData, &widths, &heights, &channels, &flags, &paths] {
-			int endPoint = i == 3 ? keys.size() : loadSplit * (i + 1);
+	//paths = SortMaterialTextures(paths);
+	int loadSplit = paths.size() / 4;
+	std::thread fileLoadThreads[4];
+	std::vector<char*> texData;
+	std::fill_n(std::back_inserter(texData), paths.size(), nullptr);
+	std::vector<int> widths;
+	std::fill_n(std::back_inserter(widths), paths.size(), 0);
+	std::vector<int> heights;
+	std::fill_n(std::back_inserter(heights), paths.size(), 0);
+	std::vector<int> channels;
+	std::fill_n(std::back_inserter(channels), paths.size(), 0);
+	std::vector<int> flags;
+	std::fill_n(std::back_inserter(flags), paths.size(), 0);
+
+	for(int i = 0; i < 4; i++) {
+		fileLoadThreads[i] = std::thread([paths, i, loadSplit, &texData, &widths, &heights, &channels, &flags] {
+			int endPoint = i == 3 ? paths.size() : loadSplit * (i + 1);
 			for (int j = loadSplit * i; j < endPoint; j++) {
-				vector<int> matTextures;
-				int meshCount = keys[j].substr(0, 6) == "Player" ? meshMap.at("Player")->GetSubMeshCount() : meshMap.at(keys[j])->GetSubMeshCount();
-				for (int i = 0; i < meshCount; ++i) {
-					const MeshMaterialEntry* matEntry = materialMap.at(keys[j])->GetMaterialForLayer(i);
-					const string* filename = nullptr;
-					matEntry->GetEntry("Diffuse", &filename);
-					int id = -1;
-
-					if (filename) {
-						string path = *filename;
-						mutex.lock();
-						if(loadStatus.contains(path)) {
-							mutex.unlock();
-							while(loadStatus[path] == -1) {
-								std::this_thread::sleep_for(16.7ms);
-							}
-						}
-						else {
-							loadStatus[path] = -1;
-							mutex.unlock();
-							char* data = nullptr;
-							int width = 0;
-							int height = 0;
-							int channel = 0;
-							int flag = 0;
-							TextureLoader::LoadTexture(path, data, width,
-								height, channel, flag);
-							mutex.lock();
-							texData.emplace_back(data);
-							widths.emplace_back(width);
-							heights.emplace_back(height);
-							channels.emplace_back(channel);
-							flags.emplace_back(flag);
-							paths.emplace_back(path);
-							loadStatus[path] = texData.size() - 1;
-							mutex.unlock();
-						}
-						id = loadStatus[path];
-					}
-					matTextures.emplace_back(id);
-
-					filename = nullptr;
-					matEntry->GetEntry("Normal", &filename);
-					id = -1;
-
-					if (filename) {
-						string path = *filename;
-						mutex.lock();
-						if (loadStatus.contains(path)) {
-							mutex.unlock();
-							while (loadStatus[path] == -1) {
-								std::this_thread::sleep_for(16.7ms);
-							}
-						}
-						else {
-							loadStatus[path] = -1;
-							mutex.unlock();
-							char* data = nullptr;
-							int width = 0;
-							int height = 0;
-							int channel = 0;
-							int flag = 0;
-							TextureLoader::LoadTexture(path, data, width,
-								height, channel, flag);
-							mutex.lock();
-							texData.emplace_back(data);
-							widths.emplace_back(width);
-							heights.emplace_back(height);
-							channels.emplace_back(channel);
-							flags.emplace_back(flag);
-							paths.emplace_back(path);
-							loadStatus[path] = texData.size() - 1;
-							mutex.unlock();
-						}
-						id = loadStatus[path];
-					}
-					matTextures.emplace_back(id);
-				}
-				unassignedMeshMaterialMap[keys[j]] = matTextures;
+				TextureLoader::LoadTexture(paths[j], texData[j], widths[j],
+					heights[j], channels[j], flags[j]);
 			}
 			});
 	}
 	for (int i = 0; i < 4; i++) {
 		fileLoadThreads[i].join();
 	}
-	std::vector<GLuint> textures;
-	for(int i = 0; i < texData.size(); i++) {
+
+	std::unordered_map<string, int> ids;
+
+	for (int i = 0; i < paths.size(); i++) {
 		OGLTexture* tex = OGLTexture::TextureFromData(texData[i], widths[i], heights[i], channels[i]).release();
 		if (FindTexHandleIndex(tex->GetObjectID()) == -1) {
 			const GLuint64 handle = glGetTextureHandleARB(tex->GetObjectID());
 			glMakeTextureHandleResidentARB(handle);
-			mTextureHandles.emplace_back(std::pair<GLuint, GLuint64>(tex->GetObjectID(), handle));
+			mTextureHandles.push_back(std::pair<GLuint, GLuint64>(tex->GetObjectID(), handle));
 			mLoadedTextures[paths[i]] = tex->GetObjectID();
-			textures.emplace_back(tex->GetObjectID());
+			ids[paths[i]] = tex->GetObjectID();
 		}
 		free(texData[i]);
 	}
+
 	for (auto const& [key, val] : unassignedMeshMaterialMap) {
 		vector<int> glIDs;
-		for(int i = 0; i < val.size(); i++) {
-			if (val[i] == -1) glIDs.emplace_back(0);
-			else glIDs.emplace_back(textures[val[i]]);
+		for (int i = 0; i < val.size(); i++) {
+			if (val[i] == "") glIDs.emplace_back(0);
+			else glIDs.emplace_back(ids[val[i]]);
 		}
 		meshMaterialMap[key] = glIDs;
 	}

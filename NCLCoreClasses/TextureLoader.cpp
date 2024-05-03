@@ -29,8 +29,8 @@ bool TextureLoader::LoadTexture(const std::string& filename, char*& outData, int
 		return false;
 	}
 
-	bool highestQuality = false;
-	bool createTextureFiles = true;
+	bool highestQuality = true;
+	bool createTextureFiles = false;
 
 	/*if(unsigned char* inData = LoadTxtrFile(filename, outData, &width, &height, &channels, &flags)) {
 		outData = (char*)inData;
